@@ -136,7 +136,7 @@ class CashInTransactionAdmin(admin.ModelAdmin):
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                 <div><strong>Transaction ID:</strong> {summary['transaction_id']}</div>
                 <div><strong>Type:</strong> {summary['type']}</div>
-                <div><strong>Amount:</strong> KES {summary['amount']:,.2f}</div>
+                <div><strong>Amount:</strong> KES {summary['amount'] or 0:,.2f}</div>
                 <div><strong>Date:</strong> {summary['date']}</div>
                 <div><strong>Status:</strong> {summary['status']}</div>
                 <div><strong>Payment Method:</strong> {summary['payment_method']}</div>
@@ -282,7 +282,7 @@ class CashOutTransactionAdmin(admin.ModelAdmin):
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                 <div><strong>Transaction ID:</strong> {summary['transaction_id']}</div>
                 <div><strong>Type:</strong> {summary['type']}</div>
-                <div><strong>Amount:</strong> KES {summary['amount']:,.2f}</div>
+                <div><strong>Amount:</strong> KES {summary['amount'] or 0:,.2f}</div>
                 <div><strong>Date:</strong> {summary['date']}</div>
                 <div><strong>Status:</strong> {summary['status']}</div>
                 <div><strong>Payment Method:</strong> {summary['payment_method']}</div>

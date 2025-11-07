@@ -43,7 +43,7 @@ class LoanAdmin(admin.ModelAdmin):
 
         ('📅 DATES & STATUS', {
             'fields': (
-                ('application_date', 'approval_date'),
+                'approval_date',
                 ('disbursement_date', 'due_date'),
                 'status', 'is_active'
             )
@@ -551,11 +551,7 @@ class LoanApplicationAdmin(admin.ModelAdmin):
             )
         }),
 
-        ('💰 LOAN DETAILS', {
-            'fields': (
-                'principal_amount', 'loan_type'
-            )
-        }),
+
 
         ('🛡️ GUARANTOR REQUIREMENTS', {
             'fields': (
@@ -606,10 +602,6 @@ class LoanApplicationAdmin(admin.ModelAdmin):
     def principal_amount_display(self, obj):
         return format_html('<strong>KES {:,}</strong>', obj.loan.principal_amount)
     principal_amount_display.short_description = 'Principal Amount'
-
-    def loan_type_display(self, obj):
-        return obj.loan.get_loan_type_display()
-    loan_type_display.short_description = 'Loan Type'
 
     def status_display(self, obj):
         status_map = {

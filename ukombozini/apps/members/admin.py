@@ -51,7 +51,7 @@ class MemberAdmin(admin.ModelAdmin):
         ('Verification', {
             'fields': (
                 'id_document', 'id_verified', 'id_verification_date',
-                'live_photo', 'biometric_data', 'biometric_verified'
+                'live_photo', 'biometric_verified'
             )
         }),
         ('Financial Summary', {

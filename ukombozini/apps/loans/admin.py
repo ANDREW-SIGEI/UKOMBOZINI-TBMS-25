@@ -5,6 +5,16 @@ from .models import Loan, LoanRepayment, IDVerification, LoanTopUp, Guarantor, L
 
 @admin.register(Loan)
 class LoanAdmin(admin.ModelAdmin):
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+
+        # Filter loans based on user type
+        if request.user.user_type == 'field_officer':
+            # Field officers can only see loans for groups assigned to them
+            qs = qs.filter(group__field_officer=request.user)
+        # Admin users can see all loans
+
+        return qs
     list_display = [
         'loan_number', 'member_name', 'group_name', 'loan_type_display',
         'principal_amount_display', 'total_repayable_display', 'current_balance_display',

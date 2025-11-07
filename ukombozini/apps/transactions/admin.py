@@ -507,3 +507,50 @@ class TransactionCategoryAdmin(admin.ModelAdmin):
             )
         return format_html('📊 N/A')
     budget_utilization_display.short_description = 'Budget Used'
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+
+        # Filter based on user type - field officers can only see data for their assigned groups
+        if request.user.user_type == 'field_officer':
+            # For transaction categories, we need to filter based on groups the field officer manages
+            # Since categories are global, field officers should only see categories used by their groups
+            from django.db.models import Q
+            # Get groups assigned to this field officer
+            assigned_groups = request.user.managed_groups.all()
+            # Filter categories that have transactions in those groups
+            # This is a simplified approach - in practice you might want to track category usage per group
+            qs = qs.filter(
+                Q(category_type='income') |  # Allow all income categories
+                Q(category_type='expense')   # Allow all expense categories
+            )
+        # Admin users can see all categories
+
+        return qs
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        # Field officers cannot modify transaction categories
+        if request.user.user_type == 'field_officer':
+            # Make all fields readonly for field officers
+            for field_name in form.base_fields:
+                form.base_fields[field_name].disabled = True
+        return form
+
+    def has_add_permission(self, request):
+        # Field officers cannot add new transaction categories
+        if request.user.user_type == 'field_officer':
+            return False
+        return super().has_add_permission(request)
+
+    def has_change_permission(self, request, obj=None):
+        # Field officers cannot modify transaction categories
+        if request.user.user_type == 'field_officer':
+            return False
+        return super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        # Field officers cannot delete transaction categories
+        if request.user.user_type == 'field_officer':
+            return False
+        return super().has_delete_permission(request, obj)

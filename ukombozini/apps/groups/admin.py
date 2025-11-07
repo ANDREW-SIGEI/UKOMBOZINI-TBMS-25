@@ -172,7 +172,42 @@ class GroupAdmin(admin.ModelAdmin):
     view_financials_link.short_description = 'Financials'
 
     def get_queryset(self, request):
-        return super().get_queryset(request).prefetch_related('members')
+        qs = super().get_queryset(request).prefetch_related('members')
+
+        # Filter groups based on user type
+        if request.user.user_type == 'field_officer':
+            # Field officers can only see groups assigned to them
+            qs = qs.filter(field_officer=request.user)
+        # Admin users can see all groups
+
+        return qs
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        # Field officers cannot modify groups
+        if request.user.user_type == 'field_officer':
+            # Make all fields readonly for field officers
+            for field_name in form.base_fields:
+                form.base_fields[field_name].disabled = True
+        return form
+
+    def has_add_permission(self, request):
+        # Field officers cannot add new groups
+        if request.user.user_type == 'field_officer':
+            return False
+        return super().has_add_permission(request)
+
+    def has_change_permission(self, request, obj=None):
+        # Field officers cannot modify groups
+        if request.user.user_type == 'field_officer':
+            return False
+        return super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        # Field officers cannot delete groups
+        if request.user.user_type == 'field_officer':
+            return False
+        return super().has_delete_permission(request, obj)
 
 @admin.register(CashInTransaction)
 class CashInTransactionAdmin(admin.ModelAdmin):

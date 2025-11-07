@@ -76,7 +76,15 @@ class MemberAdmin(admin.ModelAdmin):
     )
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related('user', 'group')
+        qs = super().get_queryset(request).select_related('user', 'group')
+
+        # Filter members based on user type
+        if request.user.user_type == 'field_officer':
+            # Field officers can only see members from groups assigned to them
+            qs = qs.filter(group__field_officer=request.user)
+        # Admin users can see all members
+
+        return qs
 
     def get_full_name(self, obj):
         return obj.get_full_name()

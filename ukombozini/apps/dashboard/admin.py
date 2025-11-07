@@ -6,6 +6,16 @@ from .models import MeetingSchedule, FieldVisit, OfficerPerformance, DashboardWi
 
 @admin.register(MeetingSchedule)
 class MeetingScheduleAdmin(admin.ModelAdmin):
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+
+        # Filter meetings based on user type
+        if request.user.user_type == 'field_officer':
+            # Field officers can only see meetings for groups assigned to them
+            qs = qs.filter(group__field_officer=request.user)
+        # Admin users can see all meetings
+
+        return qs
     list_display = [
         'meeting_id', 'title', 'meeting_type_display', 'scheduled_date',
         'scheduled_time', 'group_link', 'officer_link', 'status_display',
@@ -198,6 +208,16 @@ class MeetingScheduleAdmin(admin.ModelAdmin):
 
 @admin.register(FieldVisit)
 class FieldVisitAdmin(admin.ModelAdmin):
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+
+        # Filter field visits based on user type
+        if request.user.user_type == 'field_officer':
+            # Field officers can only see field visits for groups assigned to them
+            qs = qs.filter(group__field_officer=request.user)
+        # Admin users can see all field visits
+
+        return qs
     list_display = [
         'visit_id', 'visit_type_display', 'scheduled_date', 'group_link',
         'officer_link', 'status_display', 'members_met_count', 'is_completed_display'
@@ -260,6 +280,16 @@ class FieldVisitAdmin(admin.ModelAdmin):
 
 @admin.register(OfficerPerformance)
 class OfficerPerformanceAdmin(admin.ModelAdmin):
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+
+        # Filter officer performance based on user type
+        if request.user.user_type == 'field_officer':
+            # Field officers can only see their own performance records
+            qs = qs.filter(officer=request.user)
+        # Admin users can see all officer performance records
+
+        return qs
     list_display = [
         'officer_link', 'performance_date', 'period_type_display',
         'performance_score_display', 'meetings_completion_rate_display',
@@ -379,6 +409,16 @@ class DashboardWidgetAdmin(admin.ModelAdmin):
 
 @admin.register(OfficerAlert)
 class OfficerAlertAdmin(admin.ModelAdmin):
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+
+        # Filter officer alerts based on user type
+        if request.user.user_type == 'field_officer':
+            # Field officers can only see their own alerts
+            qs = qs.filter(officer=request.user)
+        # Admin users can see all officer alerts
+
+        return qs
     list_display = [
         'title', 'officer_link', 'alert_type_display', 'alert_level_display',
         'is_active_display', 'alert_date'
@@ -418,6 +458,9 @@ class OfficerAlertAdmin(admin.ModelAdmin):
     alert_level_display.short_description = 'Level'
 
     def is_active_display(self, obj):
+        if obj.is_active:
+            return format_html('🔴 Active')
+        return format_html('⚪ Inactive')
         if obj.is_active:
             return format_html('🔴 Active')
         return format_html('⚪ Inactive')

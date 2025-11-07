@@ -4,6 +4,20 @@ from .models import CustomUser, UserActivity
 
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+
+        # Filter users based on user type
+        if request.user.user_type == 'field_officer':
+            # Field officers can only see themselves and other field officers in their county
+            qs = qs.filter(
+                models.Q(id=request.user.id) |  # Can see themselves
+                models.Q(user_type='field_officer', assigned_county=request.user.assigned_county)  # Can see other field officers in same county
+            )
+        # Admin users can see all users
+
+        return qs
+
     list_display = ('username', 'email', 'first_name', 'last_name', 'user_type',
                    'assigned_county', 'is_active', 'date_joined', 'last_activity')
     list_filter = ('user_type', 'is_active', 'is_staff', 'assigned_county', 'date_joined')

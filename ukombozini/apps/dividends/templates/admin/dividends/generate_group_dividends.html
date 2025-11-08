@@ -1,0 +1,91 @@
+{% extends "admin/base_site.html" %}
+{% load admin_urls %}
+
+{% block title %}Generate Group Dividends - {{ period.name }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label='dividends' %}">Dividends</a>
+    &rsaquo; <a href="{% url 'admin:dividends_dividendperiod_changelist' %}">Dividend periods</a>
+    &rsaquo; <a href="{% url 'admin:dividends_dividendperiod_change' period.pk %}">{{ period.name }}</a>
+    &rsaquo; Generate Group Dividends
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="module">
+    <h2>Generate Dividends for {{ period.name }}</h2>
+
+    <div class="form-row">
+        <p><strong>Period:</strong> {{ period.name }} ({{ period.year }})</p>
+        <p><strong>Data Collection Months:</strong> {% for month in period.get_data_collection_months %}{{ period.get_month_name|call:month }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+        <p><strong>Status:</strong> {{ period.get_status_display }}</p>
+    </div>
+
+    {% if error_message %}
+    <div class="errornote">
+        {{ error_message }}
+    </div>
+    {% endif %}
+
+    {% if success_message %}
+    <div class="success">
+        {{ success_message }}
+    </div>
+    {% endif %}
+
+    <form method="post" action="">
+        {% csrf_token %}
+
+        <div class="form-row">
+            <label for="id_group">Select Group:</label>
+            <select name="group" id="id_group" required>
+                <option value="">---------</option>
+                {% for group in groups %}
+                <option value="{{ group.id }}">{{ group.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="submit-row">
+            <input type="submit" value="Generate Dividends" class="default">
+            <a href="{% url 'admin:dividends_dividendperiod_change' period.pk %}" class="button">Cancel</a>
+        </div>
+    </form>
+
+    {% if report %}
+    <div class="module">
+        <h3>Dividend Report for {{ report.group_name }}</h3>
+
+        <div class="form-row">
+            <p><strong>Total Members:</strong> {{ report.total_members }}</p>
+            <p><strong>Total Income:</strong> ${{ report.total_income }}</p>
+            <p><strong>Total Expenses:</strong> ${{ report.total_expenses }}</p>
+            <p><strong>Net Profit:</strong> ${{ report.net_profit }}</p>
+            <p><strong>Dividend Pool:</strong> ${{ report.dividend_pool }}</p>
+        </div>
+
+        <h4>Member Dividends</h4>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Member</th>
+                    <th>Shares</th>
+                    <th>Dividend Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for dividend in report.member_dividends %}
+                <tr>
+                    <td>{{ dividend.member_name }}</td>
+                    <td>{{ dividend.shares }}</td>
+                    <td>${{ dividend.amount }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends "admin/base_site.html" %}
+{% load admin_urls %}
+
+{% block title %}All Group Dividend Reports - {{ period.name }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label='dividends' %}">Dividends</a>
+    &rsaquo; <a href="{% url 'admin:dividends_dividendperiod_changelist' %}">Dividend periods</a>
+    &rsaquo; <a href="{% url 'admin:dividends_dividendperiod_change' period.pk %}">{{ period.name }}</a>
+    &rsaquo; All Group Reports
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="module">
+    <h2>All Group Dividend Reports for {{ period.name }}</h2>
+
+    <div class="form-row">
+        <p><strong>Period:</strong> {{ period.name }} ({{ period.year }})</p>
+        <p><strong>Data Collection Months:</strong> {% for month in period.get_data_collection_months %}{{ period.get_month_name|call:month }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+        <p><strong>Status:</strong> {{ period.get_status_display }}</p>
+    </div>
+
+    {% if reports %}
+    <div class="results">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Group Name</th>
+                    <th>Total Members</th>
+                    <th>Total Income</th>
+                    <th>Total Expenses</th>
+                    <th>Net Profit</th>
+                    <th>Dividend Pool</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for report in reports %}
+                <tr>
+                    <td>{{ report.group_name }}</td>
+                    <td>{{ report.total_members }}</td>
+                    <td>${{ report.total_income }}</td>
+                    <td>${{ report.total_expenses }}</td>
+                    <td>${{ report.net_profit }}</td>
+                    <td>${{ report.dividend_pool }}</td>
+                    <td>
+                        <a href="{% url 'admin:dividends_dividendperiod_group_report' period.pk report.group_id %}" class="button">View Details</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="submit-row">
+        <a href="{% url 'admin:dividends_dividendperiod_change' period.pk %}" class="button">Back to Period</a>
+    </div>
+    {% else %}
+    <div class="info">
+        <p>No dividend reports found for this period.</p>
+        <a href="{% url 'admin:dividends_dividendperiod_generate_group_dividends' period.pk %}" class="button">Generate First Report</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

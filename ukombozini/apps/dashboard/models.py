@@ -5,8 +5,12 @@ import uuid
 from datetime import date, timedelta
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+from django.contrib.auth import get_user_model
+from ukombozini.apps.sync.models import SyncableModel
 
-class MeetingSchedule(models.Model):
+User = get_user_model()
+
+class MeetingSchedule(SyncableModel):
     MEETING_TYPES = (
         ('group_meeting', 'Group Meeting'),
         ('loan_committee', 'Loan Committee Meeting'),
@@ -154,7 +158,7 @@ class MeetingSchedule(models.Model):
             return (self.actual_attendees / self.expected_attendees) * 100
         return 0
 
-class FieldVisit(models.Model):
+class FieldVisit(SyncableModel):
     VISIT_TYPES = (
         ('routine', 'Routine Visit'),
         ('loan_followup', 'Loan Follow-up'),
@@ -453,6 +457,7 @@ class OfficerAlert(models.Model):
     ALERT_TYPES = (
         ('meeting_reminder', 'Meeting Reminder'),
         ('visit_reminder', 'Field Visit Reminder'),
+        ('event_reminder', 'Event Reminder'),
         ('loan_overdue', 'Loan Overdue Alert'),
         ('savings_target', 'Savings Target Alert'),
         ('performance', 'Performance Alert'),
@@ -521,3 +526,261 @@ class OfficerAlert(models.Model):
         self.is_dismissed = True
         self.dismiss_date = timezone.now()
         self.save()
+
+class Event(SyncableModel):
+    """General Event model for calendar and attendance tracking"""
+
+    EVENT_TYPES = (
+        ('meeting', 'Meeting'),
+        ('training', 'Training'),
+        ('workshop', 'Workshop'),
+        ('field_visit', 'Field Visit'),
+        ('ceremony', 'Ceremony'),
+        ('other', 'Other'),
+    )
+
+    EVENT_STATUS = (
+        ('scheduled', 'Scheduled'),
+        ('ongoing', 'Ongoing'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+        ('postponed', 'Postponed'),
+    )
+
+    # Basic Information
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, null=True)
+    event_type = models.CharField(max_length=20, choices=EVENT_TYPES, default='meeting')
+
+    # Scheduling
+    start_datetime = models.DateTimeField()
+    end_datetime = models.DateTimeField()
+
+    # Location
+    venue = models.CharField(max_length=200)
+    venue_address = models.TextField(blank=True, null=True)
+    gps_coordinates = models.CharField(max_length=100, blank=True, null=True)
+
+    # Organization
+    group = models.ForeignKey(
+        'groups.Group',
+        on_delete=models.CASCADE,
+        related_name='events'
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_events'
+    )
+
+    # Attendees (Many-to-Many through Attendance)
+    attendees = models.ManyToManyField(
+        'members.Member',
+        through='EventAttendance',
+        related_name='attended_events',
+        blank=True
+    )
+
+    # Status and Tracking
+    status = models.CharField(max_length=20, choices=EVENT_STATUS, default='scheduled')
+    expected_attendees = models.PositiveIntegerField(default=0)
+    actual_attendees = models.PositiveIntegerField(default=0)
+
+    # Outcomes and Notes
+    notes = models.TextField(blank=True, null=True)
+    action_items = models.TextField(blank=True, null=True)
+
+    # Audit Fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Event'
+        verbose_name_plural = 'Events'
+        ordering = ['start_datetime']
+        indexes = [
+            models.Index(fields=['start_datetime']),
+            models.Index(fields=['group', 'start_datetime']),
+            models.Index(fields=['status']),
+        ]
+
+    def __str__(self):
+        return f"{self.title} - {self.start_datetime.strftime('%Y-%m-%d %H:%M')}"
+
+    def clean(self):
+        """Validate event data"""
+        if self.end_datetime <= self.start_datetime:
+            raise ValidationError({
+                'end_datetime': 'End datetime must be after start datetime'
+            })
+
+    @property
+    def duration_hours(self):
+        """Calculate event duration in hours"""
+        duration = self.end_datetime - self.start_datetime
+        return duration.total_seconds() / 3600
+
+    @property
+    def attendance_rate(self):
+        """Calculate attendance rate"""
+        if self.expected_attendees > 0:
+            return (self.actual_attendees / self.expected_attendees) * 100
+        return 0
+
+    @property
+    def is_upcoming(self):
+        """Check if event is upcoming (within next 7 days)"""
+        now = timezone.now()
+        return self.start_datetime >= now and self.start_datetime <= now + timedelta(days=7)
+
+    @property
+    def is_today(self):
+        """Check if event is scheduled for today"""
+        return self.start_datetime.date() == date.today()
+
+class EventAttendance(SyncableModel):
+    """Attendance record for events"""
+
+    ATTENDANCE_STATUS = (
+        ('present', 'Present'),
+        ('absent', 'Absent'),
+        ('late', 'Late'),
+        ('excused', 'Excused'),
+    )
+
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='attendance_records')
+    member = models.ForeignKey('members.Member', on_delete=models.CASCADE, related_name='event_attendance')
+
+    # Attendance Details
+    status = models.CharField(max_length=10, choices=ATTENDANCE_STATUS, default='present')
+    arrival_time = models.DateTimeField(blank=True, null=True)
+    departure_time = models.DateTimeField(blank=True, null=True)
+
+    # Contributions/Notes
+    contribution_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(0)]
+    )
+    notes = models.TextField(blank=True, null=True)
+
+    # Audit
+    recorded_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='recorded_attendance'
+    )
+    recorded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Event Attendance'
+        verbose_name_plural = 'Event Attendance'
+        unique_together = ['event', 'member']
+        ordering = ['event', 'member']
+        indexes = [
+            models.Index(fields=['event', 'status']),
+            models.Index(fields=['member', 'event']),
+        ]
+
+    def __str__(self):
+        return f"{self.member.get_full_name()} - {self.event.title} - {self.get_status_display()}"
+
+    @property
+    def duration_attended(self):
+        """Calculate duration attended"""
+        if self.arrival_time and self.departure_time:
+            duration = self.departure_time - self.arrival_time
+            return duration.total_seconds() / 3600  # hours
+        return 0
+
+
+class AuditLog(models.Model):
+    """Comprehensive audit logging for system activities"""
+
+    ACTION_TYPES = (
+        ('create', 'Create'),
+        ('update', 'Update'),
+        ('delete', 'Delete'),
+        ('view', 'View'),
+        ('login', 'Login'),
+        ('logout', 'Logout'),
+        ('export', 'Export'),
+        ('import', 'Import'),
+        ('approve', 'Approve'),
+        ('reject', 'Reject'),
+        ('bulk_update', 'Bulk Update'),
+        ('other', 'Other'),
+    )
+
+    # Actor Information
+    actor = models.ForeignKey(
+        'users.CustomUser',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='audit_logs',
+        help_text="User who performed the action"
+    )
+
+    # Action Details
+    action_type = models.CharField(max_length=20, choices=ACTION_TYPES)
+    target_type = models.CharField(max_length=50, help_text="Model name of the target object")
+    target_id = models.PositiveIntegerField(help_text="ID of the target object")
+
+    # Data Changes
+    old_value = models.JSONField(blank=True, null=True, help_text="Previous state as JSON")
+    new_value = models.JSONField(blank=True, null=True, help_text="New state as JSON")
+
+    # Context
+    timestamp = models.DateTimeField(auto_now_add=True)
+    location = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="GPS coordinates (lat,long) if available"
+    )
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+    user_agent = models.TextField(blank=True, null=True)
+
+    # Additional Metadata
+    description = models.TextField(blank=True, null=True, help_text="Human-readable description")
+    session_id = models.CharField(max_length=100, blank=True, null=True)
+    request_id = models.CharField(max_length=100, blank=True, null=True)
+
+    class Meta:
+        verbose_name = 'Audit Log'
+        verbose_name_plural = 'Audit Logs'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['timestamp']),
+            models.Index(fields=['actor', 'timestamp']),
+            models.Index(fields=['action_type', 'timestamp']),
+            models.Index(fields=['target_type', 'target_id']),
+        ]
+
+    def __str__(self):
+        actor_name = self.actor.get_full_name() if self.actor else 'System'
+        return f"{actor_name} - {self.get_action_type_display()} - {self.target_type} #{self.target_id} - {self.timestamp}"
+
+    @classmethod
+    def log_action(cls, actor, action_type, target_type, target_id,
+                   old_value=None, new_value=None, description=None,
+                   location=None, ip_address=None, user_agent=None,
+                   session_id=None, request_id=None):
+        """Convenience method to create audit log entries"""
+        return cls.objects.create(
+            actor=actor,
+            action_type=action_type,
+            target_type=target_type,
+            target_id=target_id,
+            old_value=old_value,
+            new_value=new_value,
+            description=description,
+            location=location,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            session_id=session_id,
+            request_id=request_id
+        )

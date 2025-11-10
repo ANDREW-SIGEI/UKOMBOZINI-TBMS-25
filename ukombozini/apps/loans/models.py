@@ -5,8 +5,9 @@ import uuid
 from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
 from django.utils import timezone
+from ukombozini.apps.sync.models import SyncableModel
 
-class Loan(models.Model):
+class Loan(SyncableModel):
     LOAN_TYPES = (
         ('short_term', 'Short Term Loan (3 months)'),
         ('long_term', 'Long Term Loan (2 years)'),
@@ -368,7 +369,7 @@ class Loan(models.Model):
                 not self.disbursement_date and
                 self.principal_amount > 0)
 
-class LoanRepayment(models.Model):
+class LoanRepayment(SyncableModel):
     PAYMENT_METHODS = (
         ('cash', 'Cash'),
         ('mpesa', 'M-Pesa'),

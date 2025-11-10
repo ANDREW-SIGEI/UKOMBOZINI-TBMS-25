@@ -1,1 +1,22 @@
-INSTALLED_APPS = ['ukombozini.apps.dividends']
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'rest_framework',
+    'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
+    'corsheaders',
+    'ukombozini.apps.users',
+    'ukombozini.apps.dividends',
+    'ukombozini.apps.groups',
+    'ukombozini.apps.loans',
+    'ukombozini.apps.members',
+    'ukombozini.apps.transactions',
+    'ukombozini.apps.dashboard',
+    'ukombozini.apps.savings',
+    'ukombozini.apps.messaging',
+    'ukombozini.apps.sync',
+]

@@ -50,6 +50,8 @@ INSTALLED_APPS = [
     'ukombozini.apps.members',
     'ukombozini.apps.transactions',
     'ukombozini.apps.dashboard',
+    'ukombozini.apps.savings',
+    'ukombozini.apps.messaging',
 ]
 
 

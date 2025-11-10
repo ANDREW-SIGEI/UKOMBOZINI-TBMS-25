@@ -5,16 +5,18 @@ from django.db.models import Q, Count, Sum, Avg
 from django.utils import timezone
 from datetime import date, timedelta
 from decimal import Decimal
-from .models import MeetingSchedule, FieldVisit, OfficerPerformance, DashboardWidget, OfficerAlert
+from .models import MeetingSchedule, FieldVisit, OfficerPerformance, DashboardWidget, OfficerAlert, Event, EventAttendance
 from .serializers import (
     MeetingScheduleSerializer, FieldVisitSerializer, OfficerPerformanceSerializer,
     DashboardWidgetSerializer, OfficerAlertSerializer, DashboardOverviewSerializer,
-    CalendarEventSerializer
+    CalendarEventSerializer, EventSerializer, EventAttendanceSerializer
 )
 from ukombozini.apps.groups.models import Group
 from ukombozini.apps.loans.models import Loan, LoanRepayment
 from ukombozini.apps.members.models import Member
 from ukombozini.apps.transactions.models import CashInTransaction, CashOutTransaction
+from ukombozini.apps.messaging.utils import send_meeting_notification, send_field_visit_notification
+from ukombozini.apps.messaging.services import MessageService
 
 class OfficerDashboardView(generics.GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -57,6 +59,8 @@ class OfficerDashboardView(generics.GenericAPIView):
 
         # Meeting Statistics
         total_meetings = meetings_qs.count()
+        meetings_completed = meetings_qs.filter(status='completed').count()
+        meetings_completion_rate = (meetings_completed / total_meetings * 100) if total_meetings > 0 else 0
         meetings_today = meetings_qs.filter(scheduled_date=today).count()
         meetings_this_week = meetings_qs.filter(
             scheduled_date__range=[week_start, week_end]
@@ -184,6 +188,32 @@ class MeetingScheduleView(generics.ListCreateAPIView):
             related_object_id=meeting.id
         )
 
+        # Send SMS notification to group members
+        if meeting.send_reminder:
+            send_meeting_notification(meeting)
+
+        # Send SMS notification to the officer
+        message_service = MessageService()
+        message_body = f"""UKOMBOZINI Meeting Reminder
+
+Meeting: {meeting.title}
+Date: {meeting.scheduled_date}
+Time: {meeting.scheduled_time}
+Venue: {meeting.venue}
+
+Please attend this important meeting.
+
+UKOMBOZINI SACCO"""
+
+        sent_messages, failed_messages = message_service.send_individual_message(
+            recipient=meeting.officer,
+            message_type='meeting_reminder',
+            message_body=message_body,
+            subject=f'Meeting Reminder: {meeting.title}',
+            delivery_method='sms',
+            related_meeting=meeting
+        )
+
 class FieldVisitView(generics.ListCreateAPIView):
     serializer_class = FieldVisitSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -210,6 +240,33 @@ class FieldVisitView(generics.ListCreateAPIView):
             message=f'You have a field visit scheduled for {visit.scheduled_date} at {visit.location}',
             related_object_type='field_visit',
             related_object_id=visit.id
+        )
+
+        # Send SMS notification to group members
+        send_field_visit_notification(visit)
+
+        # Send SMS notification to the officer
+        message_service = MessageService()
+        message_body = f"""UKOMBOZINI Field Visit Reminder
+
+Group: {visit.group.name}
+Date: {visit.scheduled_date}
+Time: {visit.scheduled_time}
+Location: {visit.location}
+
+Purpose: {visit.purpose or 'Regular field visit'}
+
+Please conduct this field visit as scheduled.
+
+UKOMBOZINI SACCO"""
+
+        sent_messages, failed_messages = message_service.send_individual_message(
+            recipient=visit.officer,
+            message_type='visit_reminder',
+            message_body=message_body,
+            subject=f'Field Visit Reminder: {visit.group.name}',
+            delivery_method='sms',
+            related_field_visit=visit
         )
 
 @api_view(['GET'])
@@ -458,3 +515,131 @@ class OfficerAlertView(generics.ListAPIView):
             return Response({'message': 'Alert dismissed'})
         except OfficerAlert.DoesNotExist:
             return Response({'error': 'Alert not found'}, status=status.HTTP_404_NOT_FOUND)
+
+class EventView(generics.ListCreateAPIView):
+    serializer_class = EventSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        officer = self.request.user
+
+        if officer.user_type == 'admin':
+            return Event.objects.all()
+        elif officer.user_type == 'field_officer':
+            # Field officers can see events for groups they manage
+            groups = Group.objects.filter(Q(field_officer=officer) | Q(created_by=officer))
+            return Event.objects.filter(group__in=groups)
+        else:
+            return Event.objects.none()
+
+    def perform_create(self, serializer):
+        event = serializer.save(created_by=self.request.user)
+
+        # Create alert for the event
+        OfficerAlert.objects.create(
+            officer=self.request.user,  # Alert the creator/officer
+            alert_type='meeting_reminder',  # Using existing alert type
+            alert_level='medium',
+            title=f'New Event Created: {event.title}',
+            message=f'Event scheduled for {event.start_datetime.strftime("%Y-%m-%d %H:%M")} at {event.venue}',
+            related_object_type='event',
+            related_object_id=event.id
+        )
+
+class EventDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = EventSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        officer = self.request.user
+
+        if officer.user_type == 'admin':
+            return Event.objects.all()
+        elif officer.user_type == 'field_officer':
+            groups = Group.objects.filter(Q(field_officer=officer) | Q(created_by=officer))
+            return Event.objects.filter(group__in=groups)
+        else:
+            return Event.objects.none()
+
+class EventAttendanceView(generics.ListCreateAPIView):
+    serializer_class = EventAttendanceSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        event_id = self.kwargs.get('event_id')
+        officer = self.request.user
+
+        # Check if officer has access to this event
+        if officer.user_type == 'admin':
+            event = Event.objects.filter(id=event_id).first()
+        elif officer.user_type == 'field_officer':
+            groups = Group.objects.filter(Q(field_officer=officer) | Q(created_by=officer))
+            event = Event.objects.filter(id=event_id, group__in=groups).first()
+        else:
+            event = None
+
+        if not event:
+            return EventAttendance.objects.none()
+
+        return EventAttendance.objects.filter(event=event)
+
+    def perform_create(self, serializer):
+        event_id = self.kwargs.get('event_id')
+        event = Event.objects.get(id=event_id)
+
+        attendance = serializer.save(
+            event=event,
+            recorded_by=self.request.user
+        )
+
+        # Update event attendance count
+        event.actual_attendees = event.attendance_records.filter(status='present').count()
+        event.save()
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def bulk_mark_attendance(request, event_id):
+    """Bulk mark attendance for event members"""
+    try:
+        event = Event.objects.get(id=event_id)
+        attendance_data = request.data.get('attendance', [])
+
+        # Check permissions
+        officer = request.user
+        if officer.user_type not in ['admin', 'field_officer']:
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+
+        if officer.user_type == 'field_officer':
+            groups = Group.objects.filter(Q(field_officer=officer) | Q(created_by=officer))
+            if event.group not in groups:
+                return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+
+        updated_count = 0
+        for item in attendance_data:
+            member_id = item.get('member_id')
+            status = item.get('status', 'present')
+
+            attendance, created = EventAttendance.objects.update_or_create(
+                event=event,
+                member_id=member_id,
+                defaults={
+                    'status': status,
+                    'recorded_by': officer,
+                    'arrival_time': timezone.now() if status == 'present' else None
+                }
+            )
+            updated_count += 1
+
+        # Update event attendance count
+        event.actual_attendees = event.attendance_records.filter(status='present').count()
+        event.save()
+
+        return Response({
+            'message': f'Attendance marked for {updated_count} members',
+            'actual_attendees': event.actual_attendees
+        })
+
+    except Event.DoesNotExist:
+        return Response({'error': 'Event not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)

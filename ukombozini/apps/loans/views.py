@@ -11,6 +11,7 @@ from .serializers import (
     AvailableGuarantorSerializer, LoanApplicationSerializer
 )
 from ukombozini.apps.users.views import log_user_activity
+from ukombozini.apps.messaging.utils import send_loan_balance_notification
 
 class LoanListView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -158,6 +159,9 @@ def disburse_loan(request, loan_id):
         loan.disbursement_date = date.today()
         loan.status = 'disbursed'
         loan.save()
+
+        # Send SMS notification to member about loan disbursement
+        send_loan_balance_notification(loan)
 
         # Log activity
         log_user_activity(

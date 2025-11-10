@@ -30,8 +30,12 @@ urlpatterns = [
     path('api/members/', include('ukombozini.apps.members.urls')),
     path('api/transactions/', include('ukombozini.apps.transactions.urls')),
     path('api/dashboard/', include('ukombozini.apps.dashboard.urls')),
+    path('api/savings/', include('ukombozini.apps.savings.urls')),
+    path('api/messaging/', include('ukombozini.apps.messaging.urls')),
+    path('api/sync/', include('ukombozini.apps.sync.urls')),
 ]
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+

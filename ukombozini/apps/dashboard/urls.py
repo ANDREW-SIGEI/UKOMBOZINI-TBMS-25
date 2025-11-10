@@ -8,6 +8,10 @@ urlpatterns = [
     # Calendar & Scheduling
     path('meetings/', views.MeetingScheduleView.as_view(), name='meeting-list'),
     path('field-visits/', views.FieldVisitView.as_view(), name='field-visit-list'),
+    path('events/', views.EventView.as_view(), name='event-list'),
+    path('events/<int:pk>/', views.EventDetailView.as_view(), name='event-detail'),
+    path('events/<int:event_id>/attendance/', views.EventAttendanceView.as_view(), name='event-attendance'),
+    path('events/<int:event_id>/attendance/bulk/', views.bulk_mark_attendance, name='bulk-mark-attendance'),
     path('calendar-events/', views.calendar_events, name='calendar-events'),
 
     # Financial Overviews

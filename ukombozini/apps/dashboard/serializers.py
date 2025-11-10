@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.utils import timezone
 from datetime import date, timedelta
 from decimal import Decimal
-from .models import MeetingSchedule, FieldVisit, OfficerPerformance, DashboardWidget, OfficerAlert
+from .models import MeetingSchedule, FieldVisit, OfficerPerformance, DashboardWidget, OfficerAlert, Event, EventAttendance
 
 class MeetingScheduleSerializer(serializers.ModelSerializer):
     officer_name = serializers.CharField(source='officer.get_full_name', read_only=True)
@@ -199,3 +199,39 @@ class CalendarEventSerializer(serializers.Serializer):
     description = serializers.CharField(required=False)
     location = serializers.CharField(required=False)
     status = serializers.CharField(required=False)
+
+class EventSerializer(serializers.ModelSerializer):
+    group_name = serializers.CharField(source='group.name', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
+    duration_hours = serializers.ReadOnlyField()
+    attendance_rate = serializers.ReadOnlyField()
+    attendee_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Event
+        fields = [
+            'id', 'title', 'description', 'event_type', 'start_datetime', 'end_datetime',
+            'venue', 'venue_address', 'gps_coordinates', 'group', 'group_name',
+            'created_by', 'created_by_name', 'status', 'expected_attendees',
+            'actual_attendees', 'notes', 'action_items', 'duration_hours',
+            'attendance_rate', 'attendee_count', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at', 'duration_hours', 'attendance_rate']
+
+    def get_attendee_count(self, obj):
+        return obj.attendees.count()
+
+class EventAttendanceSerializer(serializers.ModelSerializer):
+    member_name = serializers.CharField(source='member.get_full_name', read_only=True)
+    event_title = serializers.CharField(source='event.title', read_only=True)
+    recorded_by_name = serializers.CharField(source='recorded_by.get_full_name', read_only=True)
+    duration_attended = serializers.ReadOnlyField()
+
+    class Meta:
+        model = EventAttendance
+        fields = [
+            'id', 'event', 'event_title', 'member', 'member_name', 'status',
+            'arrival_time', 'departure_time', 'contribution_amount', 'notes',
+            'recorded_by', 'recorded_by_name', 'recorded_at', 'duration_attended'
+        ]
+        read_only_fields = ['recorded_at', 'duration_attended']
